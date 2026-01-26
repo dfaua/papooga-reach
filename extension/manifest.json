@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "Papooga - LinkedIn Outreach Assistant",
+  "version": "1.0.0",
+  "description": "Save leads from LinkedIn Sales Navigator and automate outreach",
+  "permissions": ["storage", "activeTab", "alarms"],
+  "host_permissions": [
+    "https://www.linkedin.com/*",
+    "http://localhost:3000/*"
+  ],
+  "background": {
+    "service_worker": "src/background/service-worker.ts",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.linkedin.com/sales/*"],
+      "js": ["src/content/main.ts"]
+    }
+  ],
+  "action": {
+    "default_popup": "src/popup/popup.html",
+    "default_title": "Papooga"
+  }
+}
