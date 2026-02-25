@@ -7,18 +7,42 @@ interface Person {
   id: string;
   name: string;
   title: string | null;
+  headline: string | null;
   company_name: string | null;
+  company_linkedin_url: string | null;
   linkedin_profile_url: string | null;
+  linkedin_url: string;
   status: string | null;
   notes: string | null;
+  email: string | null;
+  email_status: string | null;
+  email_zerobounce_status: string | null;
+  email_zerobounce_sub_status: string | null;
+  email_zerobounce_at: string | null;
+  apollo_id: string | null;
+  apollo_enriched_at: string | null;
+  phone_number: string | null;
+  photo_url: string | null;
+  city: string | null;
+  state: string | null;
+  country: string | null;
+  seniority: string | null;
+  departments: string[] | null;
+  connections_count: number | null;
+  followers_count: number | null;
+  twitter_url: string | null;
+  github_url: string | null;
+  facebook_url: string | null;
+  warm_intro_referrer: string | null;
 }
 
 interface Message {
   id: string;
   person_id: string;
-  type: "sales_navigator" | "linkedin";
+  type: "sales_navigator" | "linkedin" | "email";
   direction: "sent" | "received";
   content: string;
+  subject: string | null;
   created_at: string;
 }
 
@@ -40,17 +64,19 @@ interface TimelineItem {
   type: "message" | "outreach";
   direction: "sent" | "received";
   content: string;
+  subject?: string | null;
   platform: string;
   created_at: string;
   outreachType?: string;
   outcome?: "pending" | "accepted" | "replied" | null;
 }
 
-type MessageType = "sales_navigator" | "linkedin";
+type MessageType = "sales_navigator" | "linkedin" | "email";
 
 const MESSAGE_TYPES: { value: MessageType; label: string }[] = [
   { value: "sales_navigator", label: "Sales Nav" },
   { value: "linkedin", label: "LinkedIn" },
+  { value: "email", label: "Email" },
 ];
 
 const AI_MODELS: { value: string; label: string }[] = [
@@ -65,8 +91,14 @@ export function ConversationsTable() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [outreachLogs, setOutreachLogs] = useState<OutreachLog[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
+  const [selectedPersonId, setSelectedPersonId] = useState<string | null>(() => {
+    if (typeof window !== "undefined") {
+      return new URLSearchParams(window.location.search).get("person");
+    }
+    return null;
+  });
   const [newMessage, setNewMessage] = useState("");
+  const [messageSubject, setMessageSubject] = useState("");
   const [messageType, setMessageType] = useState<MessageType>("linkedin");
   const [sending, setSending] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -84,11 +116,25 @@ export function ConversationsTable() {
   const [personNotes, setPersonNotes] = useState("");
   const [savingNotes, setSavingNotes] = useState(false);
 
+  // Person info modal state
+  const [personInfoModal, setPersonInfoModal] = useState(false);
+
   // Todo modal state
   const [todoModal, setTodoModal] = useState(false);
   const [todoTitle, setTodoTitle] = useState("");
   const [todoDueDate, setTodoDueDate] = useState("");
   const [todoPriority, setTodoPriority] = useState("medium");
+
+  const selectPerson = useCallback((personId: string | null) => {
+    setSelectedPersonId(personId);
+    const url = new URL(window.location.href);
+    if (personId) {
+      url.searchParams.set("person", personId);
+    } else {
+      url.searchParams.delete("person");
+    }
+    window.history.replaceState({}, "", url.toString());
+  }, []);
 
   const fetchData = useCallback(async () => {
     try {
@@ -171,7 +217,8 @@ export function ConversationsTable() {
       type: "message",
       direction: m.direction,
       content: m.content,
-      platform: m.type === "sales_navigator" ? "SN" : "LI",
+      subject: m.subject,
+      platform: m.type === "sales_navigator" ? "SN" : m.type === "email" ? "Email" : "LI",
       created_at: m.created_at,
     })),
     ...outreachLogs
@@ -264,11 +311,13 @@ export function ConversationsTable() {
           type: messageType,
           direction,
           content: newMessage.trim(),
+          subject: messageType === "email" && messageSubject.trim() ? messageSubject.trim() : null,
         }),
       });
 
       if (res.ok) {
         setNewMessage("");
+        setMessageSubject("");
 
         // If this is a received message, auto-mark any pending connection outreach as "replied"
         if (direction === "received") {
@@ -475,7 +524,7 @@ export function ConversationsTable() {
                 className={`p-3 border-b border-dashed border-gray-200 cursor-pointer hover:bg-gray-50 ${
                   selectedPersonId === person.id ? "bg-gray-100" : ""
                 }`}
-                onClick={() => setSelectedPersonId(person.id)}
+                onClick={() => selectPerson(person.id)}
               >
                 <div className="font-bold text-sm">{person.name}</div>
                 <div className="text-xs text-gray-600 truncate">
@@ -498,7 +547,12 @@ export function ConversationsTable() {
             <div className="p-4 border-b border-dashed border-gray-300">
               <div className="flex justify-between items-start">
                 <div>
-                  <div className="font-bold">{selectedPerson.name}</div>
+                  <div
+                    className="font-bold cursor-pointer hover:underline hover:text-blue-700"
+                    onClick={() => setPersonInfoModal(true)}
+                  >
+                    {selectedPerson.name}
+                  </div>
                   <div className="text-sm text-gray-600">
                     {selectedPerson.title} at {selectedPerson.company_name || "Unknown"}
                   </div>
@@ -560,6 +614,11 @@ export function ConversationsTable() {
                               Replied
                             </span>
                           )}
+                        </div>
+                      )}
+                      {item.subject && (
+                        <div className="text-xs font-bold mb-1 opacity-75">
+                          Sub: {item.subject}
                         </div>
                       )}
                       <div className="text-sm whitespace-pre-wrap">{item.content}</div>
@@ -638,6 +697,17 @@ export function ConversationsTable() {
                   {aiLoading ? "..." : newMessage.trim() ? "Polish" : "Generate Reply"}
                 </button>
               </div>
+              {messageType === "email" && (
+                <div className="mb-2">
+                  <input
+                    type="text"
+                    className="sketch-input w-full text-sm"
+                    placeholder="Subject line..."
+                    value={messageSubject}
+                    onChange={(e) => setMessageSubject(e.target.value)}
+                  />
+                </div>
+              )}
               <div className="mb-2">
                 <input
                   type="text"
@@ -730,6 +800,246 @@ export function ConversationsTable() {
             >
               {savingNotes ? "Saving..." : "Save Notes"}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Person Info Modal */}
+      {personInfoModal && selectedPerson && (
+        <div className="sketch-modal-overlay" onClick={() => setPersonInfoModal(false)}>
+          <div
+            className="sketch-modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: "560px" }}
+          >
+            <div className="flex justify-between items-start mb-4">
+              <div className="flex items-center gap-3">
+                {selectedPerson.photo_url && (
+                  <img
+                    src={selectedPerson.photo_url}
+                    alt={selectedPerson.name}
+                    className="w-12 h-12 rounded-full object-cover border border-gray-300"
+                  />
+                )}
+                <div>
+                  <h2 className="m-0">{selectedPerson.name}</h2>
+                  {selectedPerson.headline && (
+                    <div className="text-sm text-gray-600 mt-0.5">{selectedPerson.headline}</div>
+                  )}
+                </div>
+              </div>
+              <button
+                className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+                onClick={() => setPersonInfoModal(false)}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {/* Role & Company */}
+              <div className="border-b border-dashed border-gray-200 pb-3">
+                <div className="text-xs font-bold text-gray-500 uppercase mb-1.5">Role</div>
+                <div className="text-sm">
+                  {selectedPerson.title || "No title"}
+                  {selectedPerson.seniority && (
+                    <span className="sketch-badge text-xs ml-2">{selectedPerson.seniority}</span>
+                  )}
+                </div>
+                <div className="text-sm mt-1">
+                  {selectedPerson.company_name ? (
+                    selectedPerson.company_linkedin_url ? (
+                      <a
+                        href={selectedPerson.company_linkedin_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline"
+                      >
+                        {selectedPerson.company_name}
+                      </a>
+                    ) : (
+                      selectedPerson.company_name
+                    )
+                  ) : (
+                    <span className="text-gray-400">No company</span>
+                  )}
+                </div>
+                {selectedPerson.departments && selectedPerson.departments.length > 0 && (
+                  <div className="flex gap-1 mt-1.5 flex-wrap">
+                    {selectedPerson.departments.map((d) => (
+                      <span key={d} className="sketch-badge text-xs">{d}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Email */}
+              <div className="border-b border-dashed border-gray-200 pb-3">
+                <div className="text-xs font-bold text-gray-500 uppercase mb-1.5">Email</div>
+                {selectedPerson.email ? (
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <button
+                        className="text-sm text-blue-600 hover:underline bg-transparent border-none cursor-pointer p-0"
+                        onClick={() => {
+                          navigator.clipboard.writeText(selectedPerson.email!);
+                        }}
+                        title="Click to copy"
+                      >
+                        {selectedPerson.email}
+                      </button>
+                      {selectedPerson.email_status && (
+                        <span
+                          className={`text-xs px-1.5 py-0.5 rounded font-bold ${
+                            selectedPerson.email_status === "verified"
+                              ? "bg-green-100 text-green-700"
+                              : selectedPerson.email_status === "guessed"
+                              ? "bg-yellow-100 text-yellow-700"
+                              : "bg-gray-100 text-gray-600"
+                          }`}
+                        >
+                          Apollo: {selectedPerson.email_status}
+                        </span>
+                      )}
+                    </div>
+                    {selectedPerson.email_zerobounce_status && (
+                      <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                        <span
+                          className={`text-xs px-1.5 py-0.5 rounded font-bold ${
+                            selectedPerson.email_zerobounce_status === "valid"
+                              ? "bg-green-100 text-green-700"
+                              : selectedPerson.email_zerobounce_status === "invalid"
+                              ? "bg-red-100 text-red-700"
+                              : selectedPerson.email_zerobounce_status === "catch-all"
+                              ? "bg-yellow-100 text-yellow-700"
+                              : "bg-gray-100 text-gray-600"
+                          }`}
+                        >
+                          ZeroBounce: {selectedPerson.email_zerobounce_status}
+                        </span>
+                        {selectedPerson.email_zerobounce_sub_status && (
+                          <span className="text-xs text-gray-500">
+                            ({selectedPerson.email_zerobounce_sub_status})
+                          </span>
+                        )}
+                        {selectedPerson.email_zerobounce_at && (
+                          <span className="text-xs text-gray-400">
+                            {new Date(selectedPerson.email_zerobounce_at).toLocaleDateString()}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <span className="text-sm text-gray-400">No email</span>
+                )}
+              </div>
+
+              {/* Contact & Location */}
+              <div className="border-b border-dashed border-gray-200 pb-3">
+                <div className="text-xs font-bold text-gray-500 uppercase mb-1.5">Contact & Location</div>
+                {selectedPerson.phone_number && (
+                  <div className="text-sm mb-1">
+                    Phone: <span className="font-mono">{selectedPerson.phone_number}</span>
+                  </div>
+                )}
+                {(selectedPerson.city || selectedPerson.state || selectedPerson.country) && (
+                  <div className="text-sm">
+                    {[selectedPerson.city, selectedPerson.state, selectedPerson.country]
+                      .filter(Boolean)
+                      .join(", ")}
+                  </div>
+                )}
+                {!selectedPerson.phone_number &&
+                  !selectedPerson.city &&
+                  !selectedPerson.state &&
+                  !selectedPerson.country && (
+                    <span className="text-sm text-gray-400">No contact info</span>
+                  )}
+              </div>
+
+              {/* Social Links */}
+              <div className="border-b border-dashed border-gray-200 pb-3">
+                <div className="text-xs font-bold text-gray-500 uppercase mb-1.5">Links</div>
+                <div className="flex gap-3 flex-wrap text-sm">
+                  {(selectedPerson.linkedin_profile_url || selectedPerson.linkedin_url) && (
+                    <a
+                      href={selectedPerson.linkedin_profile_url || selectedPerson.linkedin_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline"
+                    >
+                      LinkedIn
+                    </a>
+                  )}
+                  {selectedPerson.twitter_url && (
+                    <a
+                      href={selectedPerson.twitter_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline"
+                    >
+                      Twitter
+                    </a>
+                  )}
+                  {selectedPerson.github_url && (
+                    <a
+                      href={selectedPerson.github_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline"
+                    >
+                      GitHub
+                    </a>
+                  )}
+                  {selectedPerson.facebook_url && (
+                    <a
+                      href={selectedPerson.facebook_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline"
+                    >
+                      Facebook
+                    </a>
+                  )}
+                </div>
+              </div>
+
+              {/* LinkedIn Stats */}
+              {(selectedPerson.connections_count || selectedPerson.followers_count) && (
+                <div className="border-b border-dashed border-gray-200 pb-3">
+                  <div className="text-xs font-bold text-gray-500 uppercase mb-1.5">LinkedIn Stats</div>
+                  <div className="flex gap-4 text-sm">
+                    {selectedPerson.connections_count != null && (
+                      <span>{selectedPerson.connections_count.toLocaleString()} connections</span>
+                    )}
+                    {selectedPerson.followers_count != null && (
+                      <span>{selectedPerson.followers_count.toLocaleString()} followers</span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Enrichment & Status */}
+              <div>
+                <div className="text-xs font-bold text-gray-500 uppercase mb-1.5">Status</div>
+                <div className="flex gap-2 flex-wrap text-sm">
+                  {selectedPerson.status && (
+                    <span className="sketch-badge text-xs">{selectedPerson.status}</span>
+                  )}
+                  {selectedPerson.apollo_enriched_at && (
+                    <span className="sketch-badge text-xs bg-blue-50">
+                      Apollo enriched {new Date(selectedPerson.apollo_enriched_at).toLocaleDateString()}
+                    </span>
+                  )}
+                  {selectedPerson.warm_intro_referrer && (
+                    <span className="sketch-badge text-xs bg-orange-50">
+                      Warm intro: {selectedPerson.warm_intro_referrer}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}

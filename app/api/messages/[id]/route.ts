@@ -36,7 +36,7 @@ export async function PUT(
   const body = await request.json();
 
   const updateData: Record<string, unknown> = {};
-  const allowedFields = ["type", "direction", "content"];
+  const allowedFields = ["type", "direction", "content", "subject"];
 
   for (const field of allowedFields) {
     if (field in body) {

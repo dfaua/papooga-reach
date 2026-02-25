@@ -45,11 +45,17 @@ function Star({ filled, onClick }: { filled: boolean; onClick: () => void }) {
   );
 }
 
-type SortField = "name" | "industry" | "employee_count" | "location" | "revenue_range" | "website" | "stars" | "is_contacted";
+interface ContactPerson {
+  id: string;
+  name: string;
+  outcome: string;
+}
+
+type SortField = "name" | "industry" | "employee_count" | "location" | "revenue_range" | "website" | "stars" | "is_contacted" | "in_contact";
 type SortDirection = "asc" | "desc";
 
 const NUMERIC_SORT_FIELDS: SortField[] = ["stars"];
-const BOOLEAN_SORT_FIELDS: SortField[] = ["is_contacted"];
+const BOOLEAN_SORT_FIELDS: SortField[] = ["is_contacted", "in_contact"];
 
 export function CompaniesTable() {
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -72,6 +78,9 @@ export function CompaniesTable() {
   const [notesModal, setNotesModal] = useState<Company | null>(null);
   const [notesValue, setNotesValue] = useState("");
 
+  // Contact status: company_id -> people in contact
+  const [contactStatus, setContactStatus] = useState<Record<string, ContactPerson[]>>({});
+
   // Todo modal state
   const [todoModal, setTodoModal] = useState<Company | null>(null);
   const [todoTitle, setTodoTitle] = useState("");
@@ -80,12 +89,19 @@ export function CompaniesTable() {
 
   const fetchCompanies = useCallback(async () => {
     try {
-      const res = await fetch("/api/companies", {
-        headers: { "X-API-Key": process.env.NEXT_PUBLIC_API_KEY || "" },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setCompanies(data);
+      const [companiesRes, contactRes] = await Promise.all([
+        fetch("/api/companies", {
+          headers: { "X-API-Key": process.env.NEXT_PUBLIC_API_KEY || "" },
+        }),
+        fetch("/api/companies/contact-status", {
+          headers: { "X-API-Key": process.env.NEXT_PUBLIC_API_KEY || "" },
+        }),
+      ]);
+      if (companiesRes.ok) {
+        setCompanies(await companiesRes.json());
+      }
+      if (contactRes.ok) {
+        setContactStatus(await contactRes.json());
       }
     } catch (error) {
       console.error("Failed to fetch companies:", error);
@@ -147,7 +163,11 @@ export function CompaniesTable() {
     if (sortField) {
       result.sort((a, b) => {
         let comparison: number;
-        if (NUMERIC_SORT_FIELDS.includes(sortField)) {
+        if (sortField === "in_contact") {
+          const aVal = (contactStatus[a.id]?.length || 0);
+          const bVal = (contactStatus[b.id]?.length || 0);
+          comparison = aVal - bVal;
+        } else if (NUMERIC_SORT_FIELDS.includes(sortField)) {
           const aVal = (a[sortField] as number | null) ?? -1;
           const bVal = (b[sortField] as number | null) ?? -1;
           comparison = aVal - bVal;
@@ -165,9 +185,9 @@ export function CompaniesTable() {
     }
 
     return result;
-  }, [companies, filters, sortField, sortDirection]);
+  }, [companies, filters, sortField, sortDirection, contactStatus]);
 
-  const SORT_ONLY_FIELDS: SortField[] = ["stars", "is_contacted"];
+  const SORT_ONLY_FIELDS: SortField[] = ["stars", "is_contacted", "in_contact"];
 
   const handleColumnClick = (field: SortField) => {
     if (SORT_ONLY_FIELDS.includes(field)) {
@@ -486,6 +506,7 @@ export function CompaniesTable() {
             <th>{renderColumnHeader("website", "Website")}</th>
             <th>Notes</th>
             <th>{renderColumnHeader("is_contacted", "Contacted")}</th>
+            <th>{renderColumnHeader("in_contact", "In Contact")}</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -562,6 +583,28 @@ export function CompaniesTable() {
                 >
                   {company.is_contacted ? "Yes" : "No"}
                 </button>
+              </td>
+              <td>
+                {contactStatus[company.id]?.length ? (
+                  <div className="flex flex-col gap-1">
+                    {contactStatus[company.id].map((p) => (
+                      <a
+                        key={p.id}
+                        href={`/?tab=conversations&person=${p.id}`}
+                        className="text-xs hover:underline"
+                      >
+                        <span
+                          className={`inline-block w-2 h-2 rounded-full mr-1 ${
+                            p.outcome === "replied" ? "bg-green-500" : "bg-yellow-500"
+                          }`}
+                        />
+                        {p.name}
+                      </a>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="text-gray-400 text-xs">-</span>
+                )}
               </td>
               <td>
                 <div className="flex gap-1">

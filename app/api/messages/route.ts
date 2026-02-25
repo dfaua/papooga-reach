@@ -42,6 +42,7 @@ export async function POST(request: NextRequest) {
       type: body.type,
       direction: body.direction,
       content: body.content,
+      subject: body.subject || null,
     })
     .select()
     .single();
