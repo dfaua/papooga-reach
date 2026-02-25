@@ -6,12 +6,13 @@ import { PeopleTable } from "./components/PeopleTable";
 import { ProfilesTable } from "./components/ProfilesTable";
 import { MessagingTable } from "./components/MessagingTable";
 import { ConversationsTable } from "./components/ConversationsTable";
+import { FollowUpsTable } from "./components/FollowUpsTable";
 import { AIContextTable } from "./components/AIContextTable";
 import { TodosTab } from "./components/TodosTab";
 import { EmailsTab } from "./components/EmailsTab";
 import { ReportsTab } from "./components/ReportsTab";
 
-type Tab = "companies" | "people" | "profiles" | "outreach" | "conversations" | "emails" | "ai-context" | "todos" | "reports";
+type Tab = "companies" | "people" | "profiles" | "outreach" | "follow-ups" | "conversations" | "emails" | "ai-context" | "todos" | "reports";
 
 interface Metrics {
   messagesToday: number;
@@ -101,6 +102,12 @@ export default function Home() {
           Outreach
         </button>
         <button
+          onClick={() => setActiveTab("follow-ups")}
+          className={`sketch-tab ${activeTab === "follow-ups" ? "sketch-tab-active" : ""}`}
+        >
+          Follow-ups
+        </button>
+        <button
           onClick={() => setActiveTab("conversations")}
           className={`sketch-tab ${activeTab === "conversations" ? "sketch-tab-active" : ""}`}
         >
@@ -138,6 +145,7 @@ export default function Home() {
         {activeTab === "people" && <PeopleTable />}
         {activeTab === "profiles" && <ProfilesTable />}
         {activeTab === "outreach" && <MessagingTable />}
+        {activeTab === "follow-ups" && <FollowUpsTable />}
         {activeTab === "conversations" && <ConversationsTable />}
         {activeTab === "emails" && <EmailsTab />}
         {activeTab === "ai-context" && <AIContextTable />}

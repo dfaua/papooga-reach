@@ -215,6 +215,7 @@ export type Database = {
           name: string
           notes: string | null
           profile_id: string
+          sequence_number: number | null
           type: string
           updated_at: string | null
         }
@@ -226,6 +227,7 @@ export type Database = {
           name: string
           notes?: string | null
           profile_id: string
+          sequence_number?: number | null
           type: string
           updated_at?: string | null
         }
@@ -237,6 +239,7 @@ export type Database = {
           name?: string
           notes?: string | null
           profile_id?: string
+          sequence_number?: number | null
           type?: string
           updated_at?: string | null
         }
@@ -294,6 +297,7 @@ export type Database = {
           outcome: string | null
           person_id: string
           template_id: string | null
+          updated_at: string | null
         }
         Insert: {
           action: string
@@ -303,6 +307,7 @@ export type Database = {
           outcome?: string | null
           person_id: string
           template_id?: string | null
+          updated_at?: string | null
         }
         Update: {
           action?: string
@@ -312,6 +317,7 @@ export type Database = {
           outcome?: string | null
           person_id?: string
           template_id?: string | null
+          updated_at?: string | null
         }
         Relationships: [
           {

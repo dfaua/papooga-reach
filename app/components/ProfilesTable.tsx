@@ -7,10 +7,11 @@ interface Template {
   id: string;
   profile_id: string;
   name: string;
-  type: "connection_note" | "message" | "inmail";
+  type: "connection_note" | "message" | "inmail" | "follow_up";
   content: string;
   is_current: boolean;
   notes: string | null;
+  sequence_number: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -40,6 +41,7 @@ const TYPES = [
   { value: "connection_note", label: "Connection Note", maxChars: 300 },
   { value: "message", label: "Message", maxChars: 8000 },
   { value: "inmail", label: "InMail", maxChars: 1900 },
+  { value: "follow_up", label: "Follow-up", maxChars: 8000 },
 ];
 
 export function ProfilesTable() {
@@ -62,7 +64,7 @@ export function ProfilesTable() {
   const [showCreateProfile, setShowCreateProfile] = useState(false);
   const [newProfile, setNewProfile] = useState({ roles: "", industry: "", pain_points: "", notes: "" });
   const [creatingTemplateForProfile, setCreatingTemplateForProfile] = useState<string | null>(null);
-  const [newTemplate, setNewTemplate] = useState({ name: "", type: "connection_note", content: "", notes: "" });
+  const [newTemplate, setNewTemplate] = useState({ name: "", type: "connection_note", content: "", notes: "", sequence_number: 1 });
 
   const fetchProfiles = useCallback(async () => {
     try {
@@ -293,12 +295,13 @@ export function ProfilesTable() {
           content: newTemplate.content,
           notes: newTemplate.notes || null,
           is_current: false,
+          sequence_number: newTemplate.type === "follow_up" ? newTemplate.sequence_number : null,
         }),
       });
 
       if (res.ok) {
         setCreatingTemplateForProfile(null);
-        setNewTemplate({ name: "", type: "connection_note", content: "", notes: "" });
+        setNewTemplate({ name: "", type: "connection_note", content: "", notes: "", sequence_number: 1 });
       }
     } catch (error) {
       console.error("Failed to create template:", error);
@@ -325,7 +328,10 @@ export function ProfilesTable() {
           "Content-Type": "application/json",
           "X-API-Key": process.env.NEXT_PUBLIC_API_KEY || "",
         },
-        body: JSON.stringify(editTemplateData),
+        body: JSON.stringify({
+          ...editTemplateData,
+          sequence_number: editTemplateData.type === "follow_up" ? editTemplateData.sequence_number : null,
+        }),
       });
 
       if (res.ok) {
@@ -640,6 +646,26 @@ export function ProfilesTable() {
                               ))}
                             </select>
                           </div>
+                          {newTemplate.type === "follow_up" && (
+                            <div>
+                              <label className="block text-xs font-bold mb-1">Sequence #</label>
+                              <input
+                                type="number"
+                                min="1"
+                                className={`sketch-input text-sm ${
+                                  newTemplate.sequence_number < 1 ? "border-red-500" : ""
+                                }`}
+                                value={newTemplate.sequence_number}
+                                onChange={(e) =>
+                                  setNewTemplate({ ...newTemplate, sequence_number: parseInt(e.target.value) || 1 })
+                                }
+                                onWheel={(e) => e.currentTarget.blur()}
+                              />
+                              {newTemplate.sequence_number < 1 && (
+                                <div className="text-xs text-red-600 mt-1">Must be at least 1</div>
+                              )}
+                            </div>
+                          )}
                         </div>
                         <div className="mb-2">
                           <label className="block text-xs font-bold mb-1">Content</label>
@@ -744,6 +770,29 @@ export function ProfilesTable() {
                                         ))}
                                       </select>
                                     </div>
+                                    {editTemplateData.type === "follow_up" && (
+                                      <div>
+                                        <label className="block text-xs font-bold mb-1">Sequence #</label>
+                                        <input
+                                          type="number"
+                                          min="1"
+                                          className={`sketch-input text-sm ${
+                                            (editTemplateData.sequence_number ?? 0) < 1 ? "border-red-500" : ""
+                                          }`}
+                                          value={editTemplateData.sequence_number ?? 1}
+                                          onChange={(e) =>
+                                            setEditTemplateData({
+                                              ...editTemplateData,
+                                              sequence_number: parseInt(e.target.value) || 1,
+                                            })
+                                          }
+                                          onWheel={(e) => e.currentTarget.blur()}
+                                        />
+                                        {(editTemplateData.sequence_number ?? 0) < 1 && (
+                                          <div className="text-xs text-red-600 mt-1">Must be at least 1</div>
+                                        )}
+                                      </div>
+                                    )}
                                   </div>
                                   <div>
                                     <label className="block text-xs font-bold mb-1">Content</label>
@@ -813,6 +862,9 @@ export function ProfilesTable() {
                                       )}
                                       <span className="sketch-badge text-xs">
                                         {getTypeInfo(template.type).label}
+                                        {template.type === "follow_up" && template.sequence_number && (
+                                          <> #{template.sequence_number}</>
+                                        )}
                                       </span>
                                     </div>
                                     <div className="flex gap-1">

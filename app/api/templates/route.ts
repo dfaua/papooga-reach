@@ -58,6 +58,7 @@ export async function POST(request: NextRequest) {
       content: body.content,
       is_current: body.is_current ?? false,
       notes: body.notes,
+      sequence_number: body.type === "follow_up" ? body.sequence_number : null,
     })
     .select()
     .single();

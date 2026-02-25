@@ -47,6 +47,7 @@ export async function PUT(
       content: body.content,
       is_current: body.is_current,
       notes: body.notes,
+      sequence_number: body.type === "follow_up" ? body.sequence_number : null,
     })
     .eq("id", id)
     .select()
