@@ -45,8 +45,11 @@ function Star({ filled, onClick }: { filled: boolean; onClick: () => void }) {
   );
 }
 
-type SortField = "name" | "industry" | "employee_count" | "location" | "revenue_range" | "website";
+type SortField = "name" | "industry" | "employee_count" | "location" | "revenue_range" | "website" | "stars" | "is_contacted";
 type SortDirection = "asc" | "desc";
+
+const NUMERIC_SORT_FIELDS: SortField[] = ["stars"];
+const BOOLEAN_SORT_FIELDS: SortField[] = ["is_contacted"];
 
 export function CompaniesTable() {
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -143,9 +146,20 @@ export function CompaniesTable() {
     // Apply sorting
     if (sortField) {
       result.sort((a, b) => {
-        const aVal = a[sortField] || "";
-        const bVal = b[sortField] || "";
-        const comparison = String(aVal).localeCompare(String(bVal));
+        let comparison: number;
+        if (NUMERIC_SORT_FIELDS.includes(sortField)) {
+          const aVal = (a[sortField] as number | null) ?? -1;
+          const bVal = (b[sortField] as number | null) ?? -1;
+          comparison = aVal - bVal;
+        } else if (BOOLEAN_SORT_FIELDS.includes(sortField)) {
+          const aVal = a[sortField] ? 1 : 0;
+          const bVal = b[sortField] ? 1 : 0;
+          comparison = aVal - bVal;
+        } else {
+          const aVal = a[sortField] || "";
+          const bVal = b[sortField] || "";
+          comparison = String(aVal).localeCompare(String(bVal));
+        }
         return sortDirection === "asc" ? comparison : -comparison;
       });
     }
@@ -153,7 +167,20 @@ export function CompaniesTable() {
     return result;
   }, [companies, filters, sortField, sortDirection]);
 
+  const SORT_ONLY_FIELDS: SortField[] = ["stars", "is_contacted"];
+
   const handleColumnClick = (field: SortField) => {
+    if (SORT_ONLY_FIELDS.includes(field)) {
+      // Direct sort toggle for non-text columns
+      if (sortField === field) {
+        setSortDirection((d) => (d === "asc" ? "desc" : "asc"));
+      } else {
+        setSortField(field);
+        setSortDirection("desc");
+      }
+      return;
+    }
+
     if (filterColumn === field) {
       // Already filtering this column, toggle sort
       if (sortField === field) {
@@ -388,7 +415,8 @@ export function CompaniesTable() {
   };
 
   const renderColumnHeader = (field: SortField, label: string) => {
-    const isFiltering = filterColumn === field;
+    const isSortOnly = SORT_ONLY_FIELDS.includes(field);
+    const isFiltering = filterColumn === field && !isSortOnly;
     const hasFilter = filters[field];
     const isSorted = sortField === field;
 
@@ -411,7 +439,7 @@ export function CompaniesTable() {
       <span
         className={`cursor-pointer select-none ${hasFilter ? "text-blue-600" : ""}`}
         onClick={() => handleColumnClick(field)}
-        title="Click to filter, click again to sort"
+        title={isSortOnly ? "Click to sort" : "Click to filter, click again to sort"}
       >
         {label}
         {hasFilter && " *"}
@@ -449,7 +477,7 @@ export function CompaniesTable() {
       <table className="sketch-table">
         <thead>
           <tr>
-            <th style={{ width: "60px" }}>Fav</th>
+            <th style={{ width: "60px" }}>{renderColumnHeader("stars", "Fav")}</th>
             <th>{renderColumnHeader("name", "Name")}</th>
             <th>{renderColumnHeader("industry", "Industry")}</th>
             <th>{renderColumnHeader("employee_count", "Size")}</th>
@@ -457,7 +485,7 @@ export function CompaniesTable() {
             <th>{renderColumnHeader("location", "Location")}</th>
             <th>{renderColumnHeader("website", "Website")}</th>
             <th>Notes</th>
-            <th>Contacted</th>
+            <th>{renderColumnHeader("is_contacted", "Contacted")}</th>
             <th>Actions</th>
           </tr>
         </thead>

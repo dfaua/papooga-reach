@@ -14,6 +14,12 @@ import { ReportsTab } from "./components/ReportsTab";
 
 type Tab = "companies" | "people" | "profiles" | "outreach" | "follow-ups" | "conversations" | "emails" | "ai-context" | "todos" | "reports";
 
+const VALID_TABS: Tab[] = ["companies", "people", "profiles", "outreach", "follow-ups", "conversations", "emails", "ai-context", "todos", "reports"];
+
+function isValidTab(value: string): value is Tab {
+  return VALID_TABS.includes(value as Tab);
+}
+
 interface Metrics {
   messagesToday: number;
   connectionsWeek: number;
@@ -23,6 +29,35 @@ interface Metrics {
 export default function Home() {
   const [activeTab, setActiveTab] = useState<Tab>("companies");
   const [metrics, setMetrics] = useState<Metrics>({ messagesToday: 0, connectionsWeek: 0, companiesToday: 0 });
+
+  // Sync tab state with URL ?tab= parameter
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get("tab");
+    if (tab && isValidTab(tab)) {
+      setActiveTab(tab);
+    }
+
+    const handlePopState = () => {
+      const params = new URLSearchParams(window.location.search);
+      const tab = params.get("tab");
+      if (tab && isValidTab(tab)) {
+        setActiveTab(tab);
+      } else {
+        setActiveTab("companies");
+      }
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  const handleTabChange = useCallback((tab: Tab) => {
+    setActiveTab(tab);
+    const url = new URL(window.location.href);
+    url.searchParams.set("tab", tab);
+    window.history.pushState({}, "", url.toString());
+  }, []);
 
   const fetchMetrics = useCallback(async () => {
     try {
@@ -78,61 +113,61 @@ export default function Home() {
       {/* Tabs */}
       <div className="mb-6 flex gap-2">
         <button
-          onClick={() => setActiveTab("companies")}
+          onClick={() => handleTabChange("companies")}
           className={`sketch-tab ${activeTab === "companies" ? "sketch-tab-active" : ""}`}
         >
           Companies
         </button>
         <button
-          onClick={() => setActiveTab("people")}
+          onClick={() => handleTabChange("people")}
           className={`sketch-tab ${activeTab === "people" ? "sketch-tab-active" : ""}`}
         >
           People
         </button>
         <button
-          onClick={() => setActiveTab("profiles")}
+          onClick={() => handleTabChange("profiles")}
           className={`sketch-tab ${activeTab === "profiles" ? "sketch-tab-active" : ""}`}
         >
           Profiles
         </button>
         <button
-          onClick={() => setActiveTab("outreach")}
+          onClick={() => handleTabChange("outreach")}
           className={`sketch-tab ${activeTab === "outreach" ? "sketch-tab-active" : ""}`}
         >
           Outreach
         </button>
         <button
-          onClick={() => setActiveTab("follow-ups")}
+          onClick={() => handleTabChange("follow-ups")}
           className={`sketch-tab ${activeTab === "follow-ups" ? "sketch-tab-active" : ""}`}
         >
           Follow-ups
         </button>
         <button
-          onClick={() => setActiveTab("conversations")}
+          onClick={() => handleTabChange("conversations")}
           className={`sketch-tab ${activeTab === "conversations" ? "sketch-tab-active" : ""}`}
         >
           Conversations
         </button>
         <button
-          onClick={() => setActiveTab("emails")}
+          onClick={() => handleTabChange("emails")}
           className={`sketch-tab ${activeTab === "emails" ? "sketch-tab-active" : ""}`}
         >
           Emails
         </button>
         <button
-          onClick={() => setActiveTab("ai-context")}
+          onClick={() => handleTabChange("ai-context")}
           className={`sketch-tab ${activeTab === "ai-context" ? "sketch-tab-active" : ""}`}
         >
           AI Context
         </button>
         <button
-          onClick={() => setActiveTab("todos")}
+          onClick={() => handleTabChange("todos")}
           className={`sketch-tab ${activeTab === "todos" ? "sketch-tab-active" : ""}`}
         >
           Todos
         </button>
         <button
-          onClick={() => setActiveTab("reports")}
+          onClick={() => handleTabChange("reports")}
           className={`sketch-tab ${activeTab === "reports" ? "sketch-tab-active" : ""}`}
         >
           Reports
