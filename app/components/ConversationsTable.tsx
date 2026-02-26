@@ -118,6 +118,8 @@ export function ConversationsTable() {
 
   // Person info modal state
   const [personInfoModal, setPersonInfoModal] = useState(false);
+  const [enriching, setEnriching] = useState(false);
+  const [verifyingEmail, setVerifyingEmail] = useState(false);
 
   // Todo modal state
   const [todoModal, setTodoModal] = useState(false);
@@ -463,6 +465,71 @@ export function ConversationsTable() {
       setTodoPriority("medium");
     } catch (error) {
       console.error("Failed to create todo:", error);
+    }
+  };
+
+  const enrichWithApollo = async () => {
+    if (!selectedPersonId) return;
+    setEnriching(true);
+
+    try {
+      const res = await fetch("/api/apollo/enrich-person", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-Key": process.env.NEXT_PUBLIC_API_KEY || "",
+        },
+        body: JSON.stringify({ personId: selectedPersonId }),
+      });
+
+      const result = await res.json();
+
+      if (res.ok && result.enriched) {
+        setPeople((prev) =>
+          prev.map((p) => (p.id === selectedPersonId ? { ...p, ...result.person } : p))
+        );
+      } else if (res.ok && !result.enriched) {
+        alert("No match found in Apollo database");
+      } else {
+        alert(`Error: ${result.error || "Failed to enrich"}`);
+      }
+    } catch (error) {
+      console.error("Failed to enrich with Apollo:", error);
+      alert("Failed to enrich with Apollo");
+    } finally {
+      setEnriching(false);
+    }
+  };
+
+  const verifyEmailWithZeroBounce = async () => {
+    const person = people.find((p) => p.id === selectedPersonId);
+    if (!person?.email) return;
+    setVerifyingEmail(true);
+
+    try {
+      const res = await fetch("/api/zerobounce/verify-email", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-Key": process.env.NEXT_PUBLIC_API_KEY || "",
+        },
+        body: JSON.stringify({ personId: person.id, email: person.email }),
+      });
+
+      const result = await res.json();
+
+      if (res.ok && result.verified) {
+        setPeople((prev) =>
+          prev.map((p) => (p.id === person.id ? { ...p, ...result.person } : p))
+        );
+      } else {
+        alert(`Error: ${result.error || "Failed to verify"}`);
+      }
+    } catch (error) {
+      console.error("Failed to verify email:", error);
+      alert("Failed to verify email");
+    } finally {
+      setVerifyingEmail(false);
     }
   };
 
@@ -1021,7 +1088,7 @@ export function ConversationsTable() {
               )}
 
               {/* Enrichment & Status */}
-              <div>
+              <div className="border-b border-dashed border-gray-200 pb-3">
                 <div className="text-xs font-bold text-gray-500 uppercase mb-1.5">Status</div>
                 <div className="flex gap-2 flex-wrap text-sm">
                   {selectedPerson.status && (
@@ -1036,6 +1103,42 @@ export function ConversationsTable() {
                     <span className="sketch-badge text-xs bg-orange-50">
                       Warm intro: {selectedPerson.warm_intro_referrer}
                     </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div>
+                <div className="text-xs font-bold text-gray-500 uppercase mb-1.5">Actions</div>
+                <div className="flex gap-2 flex-wrap">
+                  <button
+                    className={`sketch-btn text-xs ${selectedPerson.apollo_enriched_at ? "sketch-btn-success" : ""}`}
+                    onClick={enrichWithApollo}
+                    disabled={enriching}
+                  >
+                    {enriching
+                      ? "Enriching..."
+                      : selectedPerson.apollo_enriched_at
+                      ? "Re-enrich Apollo"
+                      : "Enrich with Apollo"}
+                  </button>
+                  {selectedPerson.email && !selectedPerson.email_zerobounce_status && (
+                    <button
+                      className="sketch-btn text-xs"
+                      onClick={verifyEmailWithZeroBounce}
+                      disabled={verifyingEmail}
+                    >
+                      {verifyingEmail ? "Verifying..." : "Verify Email (ZeroBounce)"}
+                    </button>
+                  )}
+                  {selectedPerson.email && selectedPerson.email_zerobounce_status && (
+                    <button
+                      className="sketch-btn text-xs"
+                      onClick={verifyEmailWithZeroBounce}
+                      disabled={verifyingEmail}
+                    >
+                      {verifyingEmail ? "Verifying..." : "Re-verify Email"}
+                    </button>
                   )}
                 </div>
               </div>
