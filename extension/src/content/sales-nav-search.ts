@@ -16,6 +16,7 @@ function createBadge(text: string, isContacted: boolean): HTMLElement {
 
 function extractCompanyUrls(): { url: string; element: Element }[] {
   const results: { url: string; element: Element }[] = [];
+  const seenUrls = new Set<string>();
 
   // Sales Navigator company search result cards
   // The structure may vary, so we look for links to company pages
@@ -34,6 +35,10 @@ function extractCompanyUrls(): { url: string; element: Element }[] {
 
     // Clean URL (remove query params)
     const cleanUrl = fullUrl.split("?")[0];
+
+    // Only process each company URL once
+    if (seenUrls.has(cleanUrl)) return;
+    seenUrls.add(cleanUrl);
 
     // Find the parent card element to attach the badge
     const card = link.closest('[data-anonymize="company-name"]') ||

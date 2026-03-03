@@ -86,38 +86,6 @@
   transform: rotate(0.5deg);
 }
 
-/* Paste note button in connection modal */
-.papooga-paste-note-btn {
-  display: block;
-  width: 100%;
-  padding: 10px 16px;
-  margin-bottom: 10px;
-  background: #fff;
-  color: #000;
-  border: 2px solid #000;
-  border-radius: 2px;
-  font-size: 13px;
-  font-weight: 700;
-  font-family: "Comic Sans MS", "Marker Felt", cursive, sans-serif;
-  cursor: pointer;
-  box-shadow: 3px 3px 0 #000;
-  transition: all 0.1s ease;
-  transform: rotate(-0.3deg);
-}
-
-.papooga-paste-note-btn:hover {
-  transform: rotate(0.3deg) translate(-1px, -1px);
-  box-shadow: 4px 4px 0 #000;
-}
-
-.papooga-paste-note-btn:active {
-  transform: translate(2px, 2px);
-  box-shadow: 1px 1px 0 #000;
-}
-
-.papooga-paste-note-btn-success {
-  background: #e8e8e8;
-}
 
 /* Missing fields panel */
 .papooga-missing-panel {

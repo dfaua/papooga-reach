@@ -5,7 +5,6 @@ import "../styles/content.css";
 import { initSearchBadges } from "./sales-nav-search";
 import { initCompanyPage } from "./sales-nav-company";
 import { initProfilePage } from "./sales-nav-profile";
-import { initConnectionModal } from "./linkedin-connect";
 
 // Pre-warm the service worker so it's ready when user clicks save
 function warmUpServiceWorker() {
@@ -36,9 +35,6 @@ function init() {
   if (url.includes("/sales/lead/")) {
     initProfilePage();
   }
-
-  // Always init connection modal watcher (works on any LinkedIn page)
-  initConnectionModal();
 
   console.log("Papooga extension loaded");
 }
