@@ -104,6 +104,7 @@ export function ConversationsTable() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterWithNotes, setFilterWithNotes] = useState(false);
   const [filterMultipleMessages, setFilterMultipleMessages] = useState(false);
+  const [filterStatus, setFilterStatus] = useState<string>("all");
   const [messageCounts, setMessageCounts] = useState<Record<string, number>>({});
 
   // AI suggestion state
@@ -111,6 +112,11 @@ export function ConversationsTable() {
   const [aiSuggestion, setAiSuggestion] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [messageInstructions, setMessageInstructions] = useState("");
+
+  // First contact state
+  const [firstContactMode, setFirstContactMode] = useState<"none" | "connection_with_note" | "message">("none");
+  const [connectionNote, setConnectionNote] = useState("");
+  const [loggingFirstContact, setLoggingFirstContact] = useState(false);
 
   // Notes state
   const [personNotes, setPersonNotes] = useState("");
@@ -147,11 +153,7 @@ export function ConversationsTable() {
 
       if (peopleRes.ok) {
         const allPeople: Person[] = await peopleRes.json();
-        // Filter to people who are not just "saved"
-        const contactedPeople = allPeople.filter(
-          (p) => p.status && p.status !== "saved"
-        );
-        setPeople(contactedPeople);
+        setPeople(allPeople);
 
         // Fetch message counts for all contacted people
         const countsRes = await fetch("/api/messages/counts", {
@@ -210,6 +212,9 @@ export function ConversationsTable() {
       setOutreachLogs([]);
       setPersonNotes("");
     }
+    // Reset first contact state
+    setFirstContactMode("none");
+    setConnectionNote("");
   }, [selectedPersonId, fetchMessages, people]);
 
   // Build unified timeline from messages and outreach logs
@@ -224,12 +229,12 @@ export function ConversationsTable() {
       created_at: m.created_at,
     })),
     ...outreachLogs
-      .filter((o) => o.action === "note_sent" && o.details?.message_content)
+      .filter((o) => o.action === "note_sent")
       .map((o): TimelineItem => ({
         id: o.id,
         type: "outreach",
         direction: "sent",
-        content: o.details?.message_content || "",
+        content: o.details?.message_content || "(Connection request — no note)",
         platform: o.details?.message_type === "connection" ? "Connection" : "Message",
         created_at: o.created_at,
         outreachType: o.details?.message_type,
@@ -535,13 +540,80 @@ export function ConversationsTable() {
 
   const selectedPerson = people.find((p) => p.id === selectedPersonId);
 
+  const needsFirstContact =
+    selectedPerson &&
+    (!selectedPerson.status || selectedPerson.status === "saved") &&
+    outreachLogs.length === 0;
+
+  const logFirstContact = async (
+    type: "connection_no_note" | "connection_with_note" | "message",
+    noteContent?: string
+  ) => {
+    if (!selectedPersonId) return;
+
+    setLoggingFirstContact(true);
+    try {
+      const newStatus = type === "message" ? "messaged" : "requested";
+      const outreachDetails: { message_content?: string; message_type: string } =
+        type === "connection_no_note"
+          ? { message_type: "connection" }
+          : {
+              message_content: noteContent || "",
+              message_type: type === "connection_with_note" ? "connection" : "message",
+            };
+
+      // Create outreach log (also marks company as contacted server-side)
+      await fetch("/api/outreach-logs", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-Key": process.env.NEXT_PUBLIC_API_KEY || "",
+        },
+        body: JSON.stringify({
+          person_id: selectedPersonId,
+          action: "note_sent",
+          details: outreachDetails,
+        }),
+      });
+
+      // Update person status
+      await fetch(`/api/people/${selectedPersonId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-Key": process.env.NEXT_PUBLIC_API_KEY || "",
+        },
+        body: JSON.stringify({ status: newStatus }),
+      });
+
+      // Update local state
+      setPeople((prev) =>
+        prev.map((p) =>
+          p.id === selectedPersonId ? { ...p, status: newStatus } : p
+        )
+      );
+
+      // Re-fetch outreach logs so the timeline updates
+      await fetchMessages(selectedPersonId);
+
+      // Reset first contact UI
+      setFirstContactMode("none");
+      setConnectionNote("");
+    } catch (error) {
+      console.error("Failed to log first contact:", error);
+    } finally {
+      setLoggingFirstContact(false);
+    }
+  };
+
   const filteredPeople = people.filter((p) => {
     const matchesSearch =
       p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (p.company_name?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false);
     const matchesNotesFilter = !filterWithNotes || (p.notes && p.notes.trim() !== "");
     const matchesMessagesFilter = !filterMultipleMessages || (messageCounts[p.id] || 0) >= 2;
-    return matchesSearch && matchesNotesFilter && matchesMessagesFilter;
+    const matchesStatusFilter = filterStatus === "all" || p.status === filterStatus;
+    return matchesSearch && matchesNotesFilter && matchesMessagesFilter && matchesStatusFilter;
   });
 
   if (loading) {
@@ -578,11 +650,23 @@ export function ConversationsTable() {
             />
             2+ messages
           </label>
+          <select
+            className="sketch-select w-full text-xs mt-2"
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+          >
+            <option value="all">All statuses</option>
+            <option value="saved">Saved</option>
+            <option value="requested">Requested</option>
+            <option value="accepted">Accepted</option>
+            <option value="messaged">Messaged</option>
+            <option value="replied">Replied</option>
+          </select>
         </div>
         <div className="flex-1 overflow-y-auto">
           {filteredPeople.length === 0 ? (
             <div className="p-4 text-center text-gray-500 text-sm">
-              No contacted people yet
+              No people found
             </div>
           ) : (
             filteredPeople.map((person) => (
@@ -600,6 +684,11 @@ export function ConversationsTable() {
                 <div className="text-xs text-gray-500 truncate">
                   {person.company_name || "No company"}
                 </div>
+                {person.status && (
+                  <span className={`sketch-badge sketch-badge-${person.status} text-xs mt-1 inline-block`}>
+                    {person.status}
+                  </span>
+                )}
               </div>
             ))
           )}
@@ -730,6 +819,105 @@ export function ConversationsTable() {
                 ))
               )}
             </div>
+
+            {/* First Contact Actions */}
+            {needsFirstContact && (
+              <div className="px-4 py-3 border-t border-dashed border-gray-300 bg-yellow-50">
+                <div className="text-xs font-bold text-gray-600 mb-2">
+                  Log first contact:
+                </div>
+
+                {firstContactMode === "none" && (
+                  <div className="flex gap-2 flex-wrap">
+                    <button
+                      className="sketch-btn text-xs"
+                      onClick={() => logFirstContact("connection_no_note")}
+                      disabled={loggingFirstContact}
+                    >
+                      {loggingFirstContact ? "Logging..." : "Connection Request (no note)"}
+                    </button>
+                    <button
+                      className="sketch-btn text-xs"
+                      onClick={() => setFirstContactMode("connection_with_note")}
+                    >
+                      Connection Request + Note
+                    </button>
+                    <button
+                      className="sketch-btn text-xs"
+                      onClick={() => setFirstContactMode("message")}
+                    >
+                      Message Sent
+                    </button>
+                  </div>
+                )}
+
+                {firstContactMode === "connection_with_note" && (
+                  <div className="space-y-2">
+                    <textarea
+                      className="sketch-textarea w-full text-sm"
+                      rows={3}
+                      placeholder="Connection note (max 300 chars)..."
+                      value={connectionNote}
+                      onChange={(e) => setConnectionNote(e.target.value)}
+                      autoFocus
+                    />
+                    <div className="flex items-center justify-between">
+                      <span className={`text-xs ${connectionNote.length > 300 ? "text-red-600 font-bold" : "text-gray-500"}`}>
+                        {connectionNote.length} / 300
+                      </span>
+                      <div className="flex gap-2">
+                        <button
+                          className="sketch-btn text-xs"
+                          onClick={() => { setFirstContactMode("none"); setConnectionNote(""); }}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          className="sketch-btn sketch-btn-primary text-xs"
+                          onClick={() => logFirstContact("connection_with_note", connectionNote)}
+                          disabled={!connectionNote.trim() || connectionNote.length > 300 || loggingFirstContact}
+                        >
+                          {loggingFirstContact ? "Logging..." : "Log Connection + Note"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {firstContactMode === "message" && (
+                  <div className="space-y-2">
+                    <textarea
+                      className="sketch-textarea w-full text-sm"
+                      rows={3}
+                      placeholder="Message content..."
+                      value={connectionNote}
+                      onChange={(e) => setConnectionNote(e.target.value)}
+                      autoFocus
+                    />
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-gray-500">
+                        {connectionNote.length} chars
+                      </span>
+                      <div className="flex gap-2">
+                        <button
+                          className="sketch-btn text-xs"
+                          onClick={() => { setFirstContactMode("none"); setConnectionNote(""); }}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          className="sketch-btn sketch-btn-primary text-xs"
+                          onClick={() => logFirstContact("message", connectionNote)}
+                          disabled={!connectionNote.trim() || loggingFirstContact}
+                        >
+                          {loggingFirstContact ? "Logging..." : "Log Message Sent"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Input */}
             <div className="p-4 border-t border-dashed border-gray-300">

@@ -564,6 +564,7 @@ export function CompaniesTable() {
               <td>
                 <button
                   className="sketch-btn text-xs"
+                  style={company.notes ? { background: "#fef3c7", borderColor: "#f59e0b" } : undefined}
                   onClick={() => {
                     setNotesModal(company);
                     setNotesValue(company.notes || "");
