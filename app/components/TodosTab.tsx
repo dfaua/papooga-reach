@@ -33,6 +33,7 @@ export function TodosTab() {
   const [showCompleted, setShowCompleted] = useState(false);
   const [newTodoModal, setNewTodoModal] = useState(false);
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
+  const [viewingTodo, setViewingTodo] = useState<Todo | null>(null);
 
   // Form state
   const [formTitle, setFormTitle] = useState("");
@@ -81,15 +82,15 @@ export function TodosTab() {
           if (payload.eventType === "INSERT") {
             setTodos((prev) => [payload.new as Todo, ...prev]);
           } else if (payload.eventType === "UPDATE") {
+            const updated = payload.new as Todo;
             setTodos((prev) =>
-              prev.map((t) =>
-                t.id === (payload.new as Todo).id ? (payload.new as Todo) : t
-              )
+              prev.map((t) => (t.id === updated.id ? updated : t))
             );
+            setViewingTodo((prev) => (prev?.id === updated.id ? updated : prev));
           } else if (payload.eventType === "DELETE") {
-            setTodos((prev) =>
-              prev.filter((t) => t.id !== (payload.old as Todo).id)
-            );
+            const deletedId = (payload.old as Todo).id;
+            setTodos((prev) => prev.filter((t) => t.id !== deletedId));
+            setViewingTodo((prev) => (prev?.id === deletedId ? null : prev));
           }
         }
       )
@@ -274,15 +275,17 @@ export function TodosTab() {
             {sortedTodos.map((todo) => (
               <div
                 key={todo.id}
-                className={`flex items-start gap-3 p-3 border-2 border-black rounded ${
+                className={`flex items-start gap-3 p-3 border-2 border-black rounded cursor-pointer hover:bg-gray-50 transition-colors ${
                   todo.completed ? "bg-gray-100 opacity-60" : "bg-white"
                 }`}
+                onClick={() => setViewingTodo(todo)}
               >
                 {/* Checkbox */}
                 <input
                   type="checkbox"
                   checked={todo.completed}
                   onChange={() => toggleCompleted(todo)}
+                  onClick={(e) => e.stopPropagation()}
                   className="mt-1 w-5 h-5 cursor-pointer"
                 />
 
@@ -305,38 +308,147 @@ export function TodosTab() {
                             : "text-gray-500"
                         }`}
                       >
-                        📅 {todo.due_date}
+                        {todo.due_date}
                       </span>
                     )}
                   </div>
                   {todo.description && (
-                    <p className="text-sm text-gray-600 mt-1">{todo.description}</p>
+                    <p className="text-sm text-gray-600 mt-1 line-clamp-1">{todo.description}</p>
                   )}
                   {getEntityName(todo) && (
-                    <p className="text-xs text-gray-500 mt-1">{getEntityName(todo)}</p>
+                    todo.entity_type === "person" ? (
+                      <a
+                        href={`?tab=conversations&person=${todo.entity_id}`}
+                        className="text-xs text-blue-500 hover:text-blue-700 underline mt-1 block"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {getEntityName(todo)}
+                      </a>
+                    ) : (
+                      <p className="text-xs text-gray-500 mt-1">{getEntityName(todo)}</p>
+                    )
                   )}
-                </div>
-
-                {/* Actions */}
-                <div className="flex gap-2">
-                  <button
-                    className="sketch-btn text-xs"
-                    onClick={() => openEditModal(todo)}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    className="sketch-btn sketch-btn-danger text-xs"
-                    onClick={() => deleteTodo(todo.id)}
-                  >
-                    Delete
-                  </button>
                 </div>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {/* View Todo Detail Dialog */}
+      {viewingTodo && (
+        <div className="sketch-modal-overlay" onClick={() => setViewingTodo(null)}>
+          <div className="sketch-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  checked={viewingTodo.completed}
+                  onChange={() => {
+                    toggleCompleted(viewingTodo);
+                    setViewingTodo({ ...viewingTodo, completed: !viewingTodo.completed });
+                  }}
+                  className="w-5 h-5 cursor-pointer mt-1"
+                />
+                <h2 className={`text-lg font-bold ${viewingTodo.completed ? "line-through text-gray-400" : ""}`}>
+                  {viewingTodo.title}
+                </h2>
+              </div>
+              <button
+                className="text-gray-400 hover:text-black text-xl leading-none"
+                onClick={() => setViewingTodo(null)}
+              >
+                x
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              {/* Priority & Status */}
+              <div className="flex items-center gap-3">
+                <span className={`sketch-badge ${getPriorityClass(viewingTodo.priority)}`}>
+                  {viewingTodo.priority} priority
+                </span>
+                <span className={`sketch-badge ${viewingTodo.completed ? "sketch-badge-muted" : ""}`}>
+                  {viewingTodo.completed ? "Completed" : "Pending"}
+                </span>
+              </div>
+
+              {/* Due Date */}
+              {viewingTodo.due_date && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold">Due:</span>
+                  <span
+                    className={`text-sm ${
+                      isOverdue(viewingTodo.due_date) && !viewingTodo.completed
+                        ? "text-red-600 font-bold"
+                        : "text-gray-600"
+                    }`}
+                  >
+                    {viewingTodo.due_date}
+                    {isOverdue(viewingTodo.due_date) && !viewingTodo.completed && " (overdue)"}
+                  </span>
+                </div>
+              )}
+
+              {/* Description */}
+              {viewingTodo.description && (
+                <div>
+                  <span className="text-sm font-bold">Description:</span>
+                  <p className="text-sm text-gray-600 mt-1 whitespace-pre-wrap">
+                    {viewingTodo.description}
+                  </p>
+                </div>
+              )}
+
+              {/* Linked Entity */}
+              {getEntityName(viewingTodo) && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold">Linked to:</span>
+                  {viewingTodo.entity_type === "person" ? (
+                    <a
+                      href={`?tab=conversations&person=${viewingTodo.entity_id}`}
+                      className="text-sm text-blue-600 underline hover:text-blue-800"
+                    >
+                      {getEntityName(viewingTodo)}
+                    </a>
+                  ) : (
+                    <span className="text-sm">{getEntityName(viewingTodo)}</span>
+                  )}
+                </div>
+              )}
+
+              {/* Created date */}
+              {viewingTodo.created_at && (
+                <div className="text-xs text-gray-400">
+                  Created: {new Date(viewingTodo.created_at).toLocaleDateString()}
+                </div>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                className="sketch-btn text-xs"
+                onClick={() => {
+                  setViewingTodo(null);
+                  openEditModal(viewingTodo);
+                }}
+              >
+                Edit
+              </button>
+              <button
+                className="sketch-btn sketch-btn-danger text-xs"
+                onClick={() => {
+                  deleteTodo(viewingTodo.id);
+                  setViewingTodo(null);
+                }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* New/Edit Todo Modal */}
       {newTodoModal && (

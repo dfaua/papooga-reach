@@ -8,6 +8,7 @@ interface Person {
   name: string;
   title: string | null;
   headline: string | null;
+  company_id: string | null;
   company_name: string | null;
   company_linkedin_url: string | null;
   linkedin_profile_url: string | null;
@@ -34,6 +35,37 @@ interface Person {
   github_url: string | null;
   facebook_url: string | null;
   warm_intro_referrer: string | null;
+}
+
+interface Company {
+  id: string;
+  name: string;
+  stars: number;
+}
+
+function Star({ filled, onClick }: { filled: boolean; onClick: (e: React.MouseEvent) => void }) {
+  return (
+    <svg
+      onClick={onClick}
+      className="cursor-pointer transition-transform hover:scale-110"
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      style={{ transform: `rotate(${filled ? -2 : 2}deg)` }}
+    >
+      <path
+        d="M12 2 L14.5 8.5 L21.5 9 L16 14 L17.5 21 L12 17.5 L6.5 21 L8 14 L2.5 9 L9.5 8.5 Z"
+        fill={filled ? "#fbbf24" : "none"}
+        stroke="#000"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        style={{
+          strokeDasharray: filled ? "none" : "2,1",
+        }}
+      />
+    </svg>
+  );
 }
 
 interface Message {
@@ -88,6 +120,7 @@ const AI_MODELS: { value: string; label: string }[] = [
 
 export function ConversationsTable() {
   const [people, setPeople] = useState<Person[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [outreachLogs, setOutreachLogs] = useState<OutreachLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -146,10 +179,18 @@ export function ConversationsTable() {
 
   const fetchData = useCallback(async () => {
     try {
-      // Fetch people who have been contacted (not just saved)
-      const peopleRes = await fetch("/api/people", {
-        headers: { "X-API-Key": process.env.NEXT_PUBLIC_API_KEY || "" },
-      });
+      const [peopleRes, companiesRes] = await Promise.all([
+        fetch("/api/people", {
+          headers: { "X-API-Key": process.env.NEXT_PUBLIC_API_KEY || "" },
+        }),
+        fetch("/api/companies", {
+          headers: { "X-API-Key": process.env.NEXT_PUBLIC_API_KEY || "" },
+        }),
+      ]);
+
+      if (companiesRes.ok) {
+        setCompanies(await companiesRes.json());
+      }
 
       if (peopleRes.ok) {
         const allPeople: Person[] = await peopleRes.json();
@@ -609,6 +650,41 @@ export function ConversationsTable() {
     }
   };
 
+  const getCompanyStars = (person: Person): number => {
+    if (!person.company_id) return 0;
+    const company = companies.find((c) => c.id === person.company_id);
+    return company?.stars || 0;
+  };
+
+  const updateCompanyStars = async (person: Person, starIndex: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!person.company_id) return;
+
+    const currentStars = getCompanyStars(person);
+    const newStars = currentStars === starIndex ? starIndex - 1 : starIndex;
+
+    try {
+      const res = await fetch(`/api/companies/${person.company_id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-Key": process.env.NEXT_PUBLIC_API_KEY || "",
+        },
+        body: JSON.stringify({ stars: newStars }),
+      });
+
+      if (res.ok) {
+        setCompanies((prev) =>
+          prev.map((c) =>
+            c.id === person.company_id ? { ...c, stars: newStars } : c
+          )
+        );
+      }
+    } catch (error) {
+      console.error("Failed to update stars:", error);
+    }
+  };
+
   const filteredPeople = people.filter((p) => {
     const matchesSearch =
       p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -684,8 +760,22 @@ export function ConversationsTable() {
                 <div className="text-xs text-gray-600 truncate">
                   {person.title || "No title"}
                 </div>
-                <div className="text-xs text-gray-500 truncate">
-                  {person.company_name || "No company"}
+                <div className="flex items-center gap-1 text-xs text-gray-500">
+                  <span className="truncate">
+                    {person.company_name || "No company"}
+                  </span>
+                  {person.company_id && (
+                    <div className="flex gap-0 flex-shrink-0">
+                      <Star
+                        filled={getCompanyStars(person) >= 1}
+                        onClick={(e) => updateCompanyStars(person, 1, e)}
+                      />
+                      <Star
+                        filled={getCompanyStars(person) >= 2}
+                        onClick={(e) => updateCompanyStars(person, 2, e)}
+                      />
+                    </div>
+                  )}
                 </div>
                 {person.status && (
                   <span className={`sketch-badge sketch-badge-${person.status} text-xs mt-1 inline-block`}>
@@ -712,8 +802,20 @@ export function ConversationsTable() {
                   >
                     {selectedPerson.name}
                   </div>
-                  <div className="text-sm text-gray-600">
-                    {selectedPerson.title} at {selectedPerson.company_name || "Unknown"}
+                  <div className="flex items-center gap-1.5 text-sm text-gray-600">
+                    <span>{selectedPerson.title} at {selectedPerson.company_name || "Unknown"}</span>
+                    {selectedPerson.company_id && (
+                      <div className="flex gap-0 flex-shrink-0">
+                        <Star
+                          filled={getCompanyStars(selectedPerson) >= 1}
+                          onClick={(e) => updateCompanyStars(selectedPerson, 1, e)}
+                        />
+                        <Star
+                          filled={getCompanyStars(selectedPerson) >= 2}
+                          onClick={(e) => updateCompanyStars(selectedPerson, 2, e)}
+                        />
+                      </div>
+                    )}
                   </div>
                   {selectedPerson.linkedin_profile_url && (
                     <a
