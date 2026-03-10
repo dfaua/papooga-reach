@@ -94,8 +94,16 @@ export async function POST(request: NextRequest) {
     params.append("organization_name", person.company_name);
   }
 
-  // Request personal emails and phone numbers
+  // Request personal emails
   params.append("reveal_personal_emails", "true");
+
+  // Request phone number via async webhook
+  if (body.revealPhone) {
+    const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const webhookUrl = `${supabaseUrl}/functions/v1/phone_enrichment`;
+    params.append("reveal_phone_number", "true");
+    params.append("webhook_url", webhookUrl);
+  }
 
   try {
     const apolloResponse = await fetch(`${APOLLO_API_URL}?${params.toString()}`, {

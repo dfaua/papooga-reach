@@ -473,7 +473,7 @@ export function ConversationsTable() {
     }
   };
 
-  const enrichWithApollo = async () => {
+  const enrichWithApollo = async (revealPhone = false) => {
     if (!selectedPersonId) return;
     setEnriching(true);
 
@@ -484,7 +484,7 @@ export function ConversationsTable() {
           "Content-Type": "application/json",
           "X-API-Key": process.env.NEXT_PUBLIC_API_KEY || "",
         },
-        body: JSON.stringify({ personId: selectedPersonId }),
+        body: JSON.stringify({ personId: selectedPersonId, revealPhone }),
       });
 
       const result = await res.json();
@@ -493,6 +493,9 @@ export function ConversationsTable() {
         setPeople((prev) =>
           prev.map((p) => (p.id === selectedPersonId ? { ...p, ...result.person } : p))
         );
+        if (revealPhone) {
+          alert("Phone number requested. Apollo will deliver it in a few minutes.");
+        }
       } else if (res.ok && !result.enriched) {
         alert("No match found in Apollo database");
       } else {
@@ -1301,7 +1304,7 @@ export function ConversationsTable() {
                 <div className="flex gap-2 flex-wrap">
                   <button
                     className={`sketch-btn text-xs ${selectedPerson.apollo_enriched_at ? "sketch-btn-success" : ""}`}
-                    onClick={enrichWithApollo}
+                    onClick={() => enrichWithApollo(false)}
                     disabled={enriching}
                   >
                     {enriching
@@ -1310,6 +1313,15 @@ export function ConversationsTable() {
                       ? "Re-enrich Apollo"
                       : "Enrich with Apollo"}
                   </button>
+                  {!selectedPerson.phone_number && (
+                    <button
+                      className="sketch-btn text-xs"
+                      onClick={() => enrichWithApollo(true)}
+                      disabled={enriching}
+                    >
+                      {enriching ? "..." : "Get Phone (Apollo)"}
+                    </button>
+                  )}
                   {selectedPerson.email && !selectedPerson.email_zerobounce_status && (
                     <button
                       className="sketch-btn text-xs"
